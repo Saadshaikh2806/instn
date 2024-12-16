@@ -1,0 +1,74 @@
+:root {
+  --background-color: #0f172a;
+  --text-color: #e2e8f0;
+  --input-background: #1e293b;
+  --button-background: #3b82f6;
+  --border-color: #334155;
+  --heading-color: #60a5fa;
+  --accent-color: #818cf8;
+  --error-color: #ef4444;
+}
+
+body.light-mode {
+  --background-color: #f8fafc;
+  --text-color: #0f172a;
+  --input-background: #ffffff;
+  --button-background: #3b82f6;
+  --border-color: #e2e8f0;
+  --heading-color: #2563eb;
+  --accent-color: #4f46e5;
+  --error-color: #dc2626;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  transition: all 0.3s ease;
+}
+
+h1, h2, h3 {
+  color: var(--heading-color);
+  transition: color 0.3s;
+}
+
+textarea, input {
+  background-color: var(--input-background);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+
+button {
+  background-color: var(--button-background);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.error {
+  color: #ef9a9a;
+}
+
+.light-mode .error {
+  color: #e57373;
+}
