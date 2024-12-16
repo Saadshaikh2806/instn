@@ -21,29 +21,32 @@ function App() {
       backgroundColor: 'var(--background-color)',
       color: 'var(--text-color)'
     }}>
-      <h1 style={{ 
-        margin: '15px 0',
-        padding: '0 20px', 
-        color: 'var(--heading-color)',
-        fontSize: '28px',
-        fontWeight: '600',
-        letterSpacing: '0.5px'
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '5px 20px',
+        flexWrap: 'wrap',
+        gap: '10px'
       }}>
-        InstantCraft
-      </h1>
-      <button 
-        onClick={toggleMode}
-        style={{
-          backgroundColor: 'var(--button-background)',
-          color: 'white',
-          padding: '8px 16px',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer'
-        }}
-      >
-        {isLightMode ? 'Dark Mode' : 'Light Mode'}
-      </button>
+        <h1 style={{ 
+          margin: '2px 0',
+          color: 'var(--heading-color)',
+          fontSize: 'clamp(20px, 4vw, 28px)',
+          fontWeight: '600',
+          letterSpacing: '0.5px'
+        }}>
+          InstantCraft
+        </h1>
+        <label className="theme-switch">
+          <input
+            type="checkbox"
+            checked={isLightMode}
+            onChange={toggleMode}
+          />
+          <span className="slider round"></span>
+        </label>
+      </div>
       <LiveRenderer />
     </div>
   );

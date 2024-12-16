@@ -52,7 +52,7 @@ app.post('/api/generate-website', async (req, res) => {
 
   try {
     console.log('Calling Gemini API...');
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro", generationConfig, safetySettings });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", generationConfig, safetySettings });
 
     const prompt = `Create original HTML and CSS code for a website based on this description: ${description}. 
     The HTML and CSS should be unique and not copied from existing sources. 
