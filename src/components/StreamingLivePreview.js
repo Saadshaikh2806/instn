@@ -1,116 +1,237 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const StreamingLivePreview = ({ htmlCode, cssCode }) => {
+const StreamingLivePreview = ({ htmlCode, cssCode, jsCode }) => {
   const iframeRef = useRef(null);
   const [popupWindow, setPopupWindow] = useState(null);
+  const [isFocused, setIsFocused] = useState(false);
 
-  const openInNewWindow = () => {
-    // Close existing popup if any
-    if (popupWindow) {
-      popupWindow.close();
+  const focusIframe = (e) => {
+    if (iframeRef.current) {
+      iframeRef.current.focus();
+      setIsFocused(true);
     }
-
-    // Open new window in fullscreen
-    const width = window.screen.width;
-    const height = window.screen.height;
-    const newWindow = window.open('', 'Preview', 
-      `width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no,titlebar=no,fullscreen=yes`
-    );
-    
-    // Move window to top-left corner and maximize
-    newWindow.moveTo(0, 0);
-    newWindow.resizeTo(width, height);
-    setPopupWindow(newWindow);
-
-    // Extract HTML, CSS, and JavaScript from the response
-    const htmlMatch = htmlCode.match(/<html[^>]*>[\s\S]*<\/html>/i);
-    const cssMatch = htmlCode.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-    const jsMatch = htmlCode.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
-
-    const html = htmlMatch ? htmlMatch[0] : htmlCode;
-    const css = cssMatch ? cssMatch[1] : cssCode;
-    const js = jsMatch ? jsMatch[1] : '';
-
-    // Write content to new window with proper structure
-    newWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            ${css}
-          </style>
-        </head>
-        <body>
-          ${html}
-          <script>
-            ${js}
-          </script>
-        </body>
-      </html>
-    `);
-    
-    // Add close window listener
-    window.addEventListener('beforeunload', () => {
-      if (newWindow && !newWindow.closed) {
-        newWindow.close();
-      }
-    });
+    e?.stopPropagation();
   };
 
   useEffect(() => {
-    const iframe = iframeRef.current;
-    if (iframe) {
-      const doc = iframe.contentDocument;
-      
-      // Update HTML
-      const bodyContent = htmlCode || '<h1 style="color: #ffffff; text-align: center; font-family: Arial, sans-serif;">Your website will appear here</h1>';
-      if (doc.body.innerHTML !== bodyContent) {
-        doc.body.innerHTML = bodyContent;
-      }
-      
-      // Update CSS
-      let style = doc.getElementById('dynamic-style');
-      if (!style) {
-        style = doc.createElement('style');
-        style.id = 'dynamic-style';
-        doc.head.appendChild(style);
-      }
-      const cssContent = `
-        body {
-          background-color: var(--background-color);
-          color: var(--text-color);
-          font-family: Arial, sans-serif;
-          margin: 0;
-          padding: 20px;
-          box-sizing: border-box;
-          overflow: auto;
-          height: 100%;
+    const handleKeyDown = (e) => {
+      if (isFocused) {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+          e.preventDefault();
         }
-        ${cssCode || ''}
-      `;
-      if (style.textContent !== cssContent) {
-        style.textContent = cssContent;
       }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFocused]);
+
+  const openInNewWindow = (e) => {
+    e.stopPropagation();
+    if (popupWindow && !popupWindow.closed) {
+      popupWindow.close();
     }
-  }, [htmlCode, cssCode]);
+
+    try {
+      const width = window.screen.width;
+      const height = window.screen.height;
+      const newWindow = window.open('', 'Preview', 
+        `width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`
+      );
+      
+      if (!newWindow) {
+        console.error('Failed to open new window - popup might be blocked');
+        return;
+      }
+
+      newWindow.moveTo(0, 0);
+      newWindow.resizeTo(width, height);
+      setPopupWindow(newWindow);
+
+      const content = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: *; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';">
+            <style>
+              * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+              }
+              
+              body {
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                min-height: 100vh;
+                background-color: #000;
+                color: #fff;
+                padding: 20px;
+                overflow-y: auto;
+                overflow-x: hidden;
+              }
+
+              canvas {
+                display: block;
+                margin: auto;
+                outline: none;
+                image-rendering: pixelated;
+              }
+
+              ${cssCode || ''}
+            </style>
+          </head>
+          <body>
+            <div id="root">
+              ${htmlCode || '<h1 style="text-align: center; margin-top: 20px;">Your website will appear here</h1>'}
+            </div>
+            <script>
+              try {
+                ${jsCode || ''}
+              } catch (error) {
+                console.error('Error executing JavaScript:', error);
+              }
+            </script>
+          </body>
+        </html>
+      `;
+
+      newWindow.document.write(content);
+      newWindow.document.close();
+      newWindow.focus();
+
+      window.addEventListener('beforeunload', () => {
+        if (newWindow && !newWindow.closed) {
+          newWindow.close();
+        }
+      });
+    } catch (error) {
+      console.error('Error opening new window:', error);
+    }
+  };
+
+  useEffect(() => {
+    const updateIframeContent = () => {
+      try {
+        const iframe = iframeRef.current;
+        if (!iframe) return;
+
+        const doc = iframe.contentDocument;
+        if (!doc) return;
+
+        const content = `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: *; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';">
+              <style>
+                * {
+                  margin: 0;
+                  padding: 0;
+                  box-sizing: border-box;
+                }
+                
+                body {
+                  font-family: Arial, sans-serif;
+                  line-height: 1.6;
+                  min-height: 100vh;
+                  background-color: #000;
+                  color: #fff;
+                  padding: 20px;
+                  overflow-y: auto;
+                  overflow-x: hidden;
+                }
+
+                canvas {
+                  display: block;
+                  margin: auto;
+                  outline: none;
+                  image-rendering: pixelated;
+                }
+
+                /* Apply custom CSS */
+                ${cssCode || ''}
+              </style>
+            </head>
+            <body>
+              <div id="root">
+                ${htmlCode || '<h1 style="text-align: center; margin-top: 20px;">Your website will appear here</h1>'}
+              </div>
+              <script>
+                try {
+                  ${jsCode || ''}
+                } catch (error) {
+                  console.error('Error executing JavaScript:', error);
+                }
+              </script>
+            </body>
+          </html>
+        `;
+
+        doc.open();
+        doc.write(content);
+        doc.close();
+
+        iframe.focus();
+        setIsFocused(true);
+
+        setTimeout(() => {
+          iframe.focus();
+          setIsFocused(true);
+        }, 100);
+      } catch (error) {
+        console.error('Error updating iframe content:', error);
+      }
+    };
+
+    updateIframeContent();
+
+    return () => {
+      try {
+        const iframe = iframeRef.current;
+        if (iframe && iframe.contentDocument) {
+          iframe.contentDocument.open();
+          iframe.contentDocument.write('');
+          iframe.contentDocument.close();
+        }
+        setIsFocused(false);
+      } catch (error) {
+        console.error('Error cleaning up iframe:', error);
+      }
+    };
+  }, [htmlCode, cssCode, jsCode]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
-    if (iframe) {
-      const doc = iframe.contentDocument;
-      doc.open();
-      doc.write('<html><head><style id="dynamic-style"></style></head><body></body></html>');
-      doc.close();
-    }
+    if (!iframe) return;
+
+    const handleFocus = () => setIsFocused(true);
+    const handleBlur = () => setIsFocused(false);
+
+    iframe.addEventListener('focus', handleFocus);
+    iframe.addEventListener('blur', handleBlur);
+
+    return () => {
+      iframe.removeEventListener('focus', handleFocus);
+      iframe.removeEventListener('blur', handleBlur);
+    };
   }, []);
 
   return (
-    <div className="streaming-live-preview" style={{ 
-      height: 'calc(100% - 40px)',
-      display: 'flex',
-      flexDirection: 'column',
-      position: 'relative'
-    }}>
+    <div 
+      className="streaming-live-preview" 
+      style={{ 
+        height: 'calc(100% - 40px)',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative'
+      }}
+      onClick={focusIframe}
+    >
       <button 
         onClick={openInNewWindow}
         className="fullscreen-toggle"
@@ -128,11 +249,15 @@ const StreamingLivePreview = ({ htmlCode, cssCode }) => {
         style={{
           width: '100%',
           height: '100%',
-          backgroundColor: 'var(--background-color)',
-          border: '1px solid var(--text-color)',
+          backgroundColor: '#000',
+          border: `1px solid ${isFocused ? 'var(--accent-color)' : 'var(--text-color)'}`,
           borderRadius: '4px',
-          marginBottom: '0'
+          marginBottom: '0',
+          outline: 'none'
         }}
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-downloads"
+        tabIndex="0"
+        onMouseEnter={focusIframe}
       />
     </div>
   );

@@ -22,12 +22,7 @@ function App() {
       color: 'var(--text-color)'
     }}>
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         padding: '5px 20px',
-        flexWrap: 'wrap',
-        gap: '10px'
       }}>
         <h1 style={{ 
           margin: '2px 0',
@@ -38,16 +33,8 @@ function App() {
         }}>
           InstantCraft
         </h1>
-        <label className="theme-switch">
-          <input
-            type="checkbox"
-            checked={isLightMode}
-            onChange={toggleMode}
-          />
-          <span className="slider round"></span>
-        </label>
       </div>
-      <LiveRenderer />
+      <LiveRenderer toggleMode={toggleMode} isLightMode={isLightMode} />
     </div>
   );
 }
