@@ -19,7 +19,8 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "server": "cd server && run-server.bat",
-    "dev": "concurrently \"npm start\" \"npm run server\""
+    "dev": "concurrently \"npm start\" \"npm run server\"",
+    "vercel-build": "react-scripts build"
   },
   "eslintConfig": {
     "extends": [

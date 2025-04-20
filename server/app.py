@@ -11,17 +11,20 @@ import random
 load_dotenv()
 
 # Unsplash API configuration
-UNSPLASH_ACCESS_KEY = "YOUR_UNSPLASH_ACCESS_KEY"  # Replace with your actual key or use environment variable
-# You can use the demo access key for development
+# Using the Unsplash demo key for both development and production
 UNSPLASH_DEMO_KEY = "ab3411e4ac868c2646c0ed488dfd919ef612b04c264f3374c97fff98ed253dc9"
 
 # We'll use a text description of the CSS rules instead of actual CSS code to avoid Python parsing issues
 
 app = Flask(__name__)
 # Configure CORS to allow requests from your React app
+# Get allowed origins from environment or use default for local development
+allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000')
+origins_list = [origin.strip() for origin in allowed_origins.split(',')]
+
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:3000"],
+        "origins": origins_list,
         "methods": ["GET", "POST"],
         "allow_headers": ["Content-Type"]
     }
@@ -626,5 +629,7 @@ def generate_application(description=None):
             'traceback': traceback.format_exc()
         }), 500
 
+# For local development
 if __name__ == '__main__':
-    app.run(port=3001, debug=True)
+    port = int(os.getenv('PORT', 3001))
+    app.run(host='0.0.0.0', port=port, debug=os.getenv('FLASK_DEBUG', 'True').lower() == 'true')

@@ -1,3 +1,5 @@
+// In production with Vercel, we use relative paths
+// In development, we use the full URL from .env
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
 console.log('Using backend URL:', BACKEND_URL);
 
