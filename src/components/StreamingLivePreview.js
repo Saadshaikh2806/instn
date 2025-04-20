@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import LoadingAnimation from './LoadingAnimation';
+import '../styles/StreamingLivePreview.css';
 
 const StreamingLivePreview = ({ htmlCode, cssCode, jsCode, isLoading }) => {
   const iframeRef = useRef(null);
@@ -38,8 +39,18 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode, isLoading }) => {
     }
 
     try {
-      const width = window.screen.width;
-      const height = window.screen.height;
+      // For mobile, force landscape orientation by swapping width and height
+      let width = window.screen.width;
+      let height = window.screen.height;
+
+      // On mobile devices, use landscape orientation
+      if (window.innerWidth <= 768) {
+        // Make sure width is always greater than height for landscape
+        if (width < height) {
+          [width, height] = [height, width];
+        }
+      }
+
       const newWindow = window.open('', 'Preview',
         `width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`
       );
@@ -60,6 +71,8 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode, isLoading }) => {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: *; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';">
+            <meta name="screen-orientation" content="landscape">
+            <meta name="orientation" content="landscape">
             <style>
               * {
                 margin: 0;
@@ -78,11 +91,56 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode, isLoading }) => {
                 overflow-x: hidden;
               }
 
+              @media screen and (orientation: portrait) {
+                html {
+                  transform: rotate(-90deg);
+                  transform-origin: left top;
+                  width: 100vh;
+                  height: 100vw;
+                  position: absolute;
+                  top: 100%;
+                  left: 0;
+                }
+              }
+
+              /* Canvas styling for games and simulations */
               canvas {
                 display: block;
                 margin: auto;
                 outline: none;
                 image-rendering: pixelated;
+                max-width: 100%;
+                background-color: #111;
+                border: 1px solid #333;
+              }
+
+              /* Controls for simulations and interactive applications */
+              .controls {
+                margin: 10px auto;
+                padding: 10px;
+                background-color: rgba(0, 0, 0, 0.5);
+                border-radius: 5px;
+                text-align: center;
+              }
+
+              .controls button, .controls input, .controls select {
+                margin: 5px;
+                padding: 5px 10px;
+                background-color: #333;
+                color: white;
+                border: 1px solid #555;
+                border-radius: 3px;
+              }
+
+              .controls button:hover, .controls input:hover, .controls select:hover {
+                background-color: #444;
+              }
+
+              /* For sliders in simulations */
+              input[type="range"] {
+                width: 150px;
+                margin: 0 10px;
+                vertical-align: middle;
               }
 
               ${cssCode || ''}
@@ -94,7 +152,14 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode, isLoading }) => {
             </div>
             <script>
               try {
-                ${jsCode || ''}
+                // Properly handle JavaScript execution
+                // First, create a function to safely execute the code
+                function executeCode() {
+                  ${jsCode || ''}
+                }
+
+                // Execute the code in the global scope
+                executeCode();
               } catch (error) {
                 console.error('Error executing JavaScript:', error);
               }
@@ -261,11 +326,44 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode, isLoading }) => {
                   overflow-x: hidden;
                 }
 
+                /* Canvas styling for games and simulations */
                 canvas {
                   display: block;
                   margin: auto;
                   outline: none;
                   image-rendering: pixelated;
+                  max-width: 100%;
+                  background-color: #111;
+                  border: 1px solid #333;
+                }
+
+                /* Controls for simulations and interactive applications */
+                .controls {
+                  margin: 10px auto;
+                  padding: 10px;
+                  background-color: rgba(0, 0, 0, 0.5);
+                  border-radius: 5px;
+                  text-align: center;
+                }
+
+                .controls button, .controls input, .controls select {
+                  margin: 5px;
+                  padding: 5px 10px;
+                  background-color: #333;
+                  color: white;
+                  border: 1px solid #555;
+                  border-radius: 3px;
+                }
+
+                .controls button:hover, .controls input:hover, .controls select:hover {
+                  background-color: #444;
+                }
+
+                /* For sliders in simulations */
+                input[type="range"] {
+                  width: 150px;
+                  margin: 0 10px;
+                  vertical-align: middle;
                 }
 
                 /* Animation styles */
@@ -281,7 +379,14 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode, isLoading }) => {
               </div>
               <script>
                 try {
-                  ${jsCode || ''}
+                  // Properly handle JavaScript execution
+                  // First, create a function to safely execute the code
+                  function executeCode() {
+                    ${jsCode || ''}
+                  }
+
+                  // Execute the code in the global scope
+                  executeCode();
 
                   // Add animation to dynamically added elements
                   document.addEventListener('DOMContentLoaded', function() {
@@ -363,7 +468,8 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode, isLoading }) => {
         height: 'calc(100% - 40px)',
         display: 'flex',
         flexDirection: 'column',
-        position: 'relative'
+        position: 'relative',
+        flex: '1 1 auto'
       }}
       onClick={focusIframe}
     >
@@ -395,11 +501,14 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode, isLoading }) => {
         style={{
           width: '100%',
           height: '100%',
+          flex: '1 1 auto',
+          minHeight: '300px',
           backgroundColor: '#000',
-          border: `1px solid ${isFocused ? 'var(--accent-color)' : 'var(--text-color)'}`,
-          borderRadius: '4px',
+          border: `2px solid ${isFocused ? 'var(--accent-color)' : 'var(--border-color)'}`,
+          borderRadius: '8px',
           marginBottom: '0',
-          outline: 'none'
+          outline: 'none',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
         }}
         sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-downloads"
         tabIndex="0"

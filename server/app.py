@@ -34,7 +34,7 @@ try:
         raise ValueError("GOOGLE_API_KEY not found in environment variables")
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.0-flash-exp')
+    model = genai.GenerativeModel('gemini-2.0-flash')
 except Exception as e:
     print(f"Error initializing Gemini client: {str(e)}")
     traceback.print_exc()
@@ -147,6 +147,45 @@ def generate_website():
             return jsonify({'error': 'No description provided'}), 400
 
         print(f"Received description: {description}")  # Debug log
+
+        # Check if this is a request for a game, simulation, or interactive application rather than a website
+        application_keywords = [
+            # Games
+            'game', 'snake game', 'tetris', 'puzzle game', 'chess', 'tic tac toe', 'memory game', 'pong',
+            # Physics simulations
+            'simulation', 'physics simulation', 'solar system', 'planetary model', 'physics model',
+            'particle simulation', 'gravity simulation', 'pendulum simulation', 'wave simulation',
+            # Interactive models
+            'interactive model', '3d model', 'interactive visualization', 'interactive demo',
+            # Other interactive applications
+            'calculator', 'drawing app', 'paint app', 'clock', 'timer', 'stopwatch', 'todo app',
+            'weather app', 'music player', 'drum machine', 'synthesizer', 'piano'
+        ]
+
+        # Action words that indicate the user wants something interactive
+        action_words = ['create', 'make', 'build', 'develop', 'simulate', 'model', 'interactive']
+
+        description_lower = description.lower()
+
+        # Check if the description contains any of the application keywords
+        contains_app_keyword = any(keyword in description_lower for keyword in application_keywords)
+
+        # Check if the description contains action words followed by relevant terms
+        contains_action_phrase = False
+        for action in action_words:
+            if action in description_lower:
+                # Look for phrases like "create a solar system" or "build a physics model"
+                action_index = description_lower.find(action)
+                after_action = description_lower[action_index + len(action):]
+                if any(keyword in after_action for keyword in ['simulation', 'model', 'system', 'visualization', 'interactive']):
+                    contains_action_phrase = True
+                    break
+
+        # If the description explicitly asks for an interactive application and doesn't mention 'website'
+        if (contains_app_keyword or contains_action_phrase) and 'website' not in description_lower:
+            print(f"Detected interactive application request: {description}")
+            return generate_application(description)
+
 
         # Use Gemini to extract relevant image topics from the description
         topic_prompt = f"""
@@ -469,6 +508,118 @@ def get_unsplash_images():
 
     except Exception as e:
         print(f"Error in get_unsplash_images: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/api/generate-application', methods=['POST'])
+def generate_application(description=None):
+    try:
+        # If description is not provided as a parameter, get it from the request
+        if description is None:
+            data = request.json
+            if not data:
+                return jsonify({'error': 'No JSON data received'}), 400
+
+            description = data.get('description')
+            if not description:
+                return jsonify({'error': 'No description provided'}), 400
+
+        print(f"Generating application: {description}")  # Debug log
+
+        # Determine the type of application being requested
+        description_lower = description.lower()
+        is_game = any(keyword in description_lower for keyword in ['game', 'tetris', 'chess', 'tic tac toe', 'pong'])
+        is_simulation = any(keyword in description_lower for keyword in ['simulation', 'solar system', 'physics', 'model'])
+
+        # Customize the prompt based on the type of application
+        specific_instructions = ""
+        if is_game:
+            specific_instructions = """
+            For this game:
+            - Include proper game mechanics, scoring, and win/lose conditions
+            - Add keyboard/mouse controls that are intuitive and responsive
+            - Include game state management (start, pause, restart, game over)
+            - Add sound effects if appropriate (with mute option)
+            """
+        elif is_simulation:
+            specific_instructions = """
+            For this simulation:
+            - Create a visually accurate and scientifically correct simulation
+            - Use appropriate physics formulas and calculations
+            - Add interactive controls to adjust parameters (speed, gravity, etc.)
+            - Include animations that accurately represent the physical phenomena
+            - For solar system or planetary models, use correct relative sizes and orbital mechanics
+            - Add informational tooltips or labels to explain what's happening
+            """
+        else:  # General interactive application
+            specific_instructions = """
+            For this interactive application:
+            - Create a clean, intuitive user interface
+            - Ensure all interactive elements work correctly
+            - Add appropriate feedback for user actions
+            - Include error handling for invalid inputs
+            - Make sure the application state is maintained correctly
+            """
+
+        # Prompt engineering for application/game/simulation generation
+        prompt = f"""
+        Create a standalone, functional {description} using HTML, CSS, and JavaScript.
+
+        IMPORTANT INSTRUCTIONS:
+        1. Focus on creating a WORKING, INTERACTIVE application, not just a website about it.
+        2. The JavaScript should contain all the application logic and functionality.
+        3. Use canvas for graphics if appropriate for the application.
+        4. Include clear instructions for the user on how to use the application.
+        5. Make sure the code is complete, functional, and properly handles user interactions.
+        6. The application should work entirely in the browser without requiring any server-side code.
+        7. The JavaScript code should be properly scoped and not interfere with the parent window.
+        8. Do not include any placeholder functionality - everything should actually work.
+        9. Use requestAnimationFrame for smooth animations where appropriate.
+        10. Ensure the application is responsive and works on different screen sizes.
+
+        {specific_instructions}
+
+        Return only the HTML, CSS, and JavaScript code without any explanations.
+        Format the response exactly as:
+        ```html
+        [HTML code here]
+        ```
+        ```css
+        [CSS code here]
+        ```
+        ```javascript
+        [JavaScript code here]
+        ```
+        """
+
+        print("Sending application generation request to Gemini...")  # Debug log
+
+        # Set a higher token limit for simulations which might need more complex code
+        max_tokens = 6144 if is_simulation else 4096
+
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                top_p=0.8,
+                top_k=40,
+                max_output_tokens=max_tokens,  # Increased token limit for more complex applications
+            ),
+            stream=True
+        )
+
+        print("Received application response from Gemini")  # Debug log
+
+        return Response(
+            stream_response(response),
+            mimetype='text/event-stream'
+        )
+
+    except Exception as e:
+        print(f"Error in generate_application: {str(e)}")
         traceback.print_exc()
         return jsonify({
             'error': str(e),

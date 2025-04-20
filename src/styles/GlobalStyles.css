@@ -97,6 +97,43 @@ button:not(.fullscreen-toggle):disabled {
   }
 }
 
+/* Landscape orientation adjustments for mobile */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+  .live-renderer {
+    height: auto !important;
+    min-height: 100vh;
+  }
+
+  .input-container {
+    height: auto !important;
+    min-height: 200px;
+  }
+
+  .preview-container {
+    height: auto !important;
+    min-height: 300px;
+  }
+
+  .user-input-wrapper, .modify-input-wrapper {
+    height: auto !important;
+    min-height: 100px;
+  }
+
+  .input-textarea {
+    height: 80px !important;
+  }
+
+  /* Landing page landscape adjustments */
+  .content {
+    padding: 20px !important;
+    min-height: auto !important;
+  }
+
+  .features {
+    margin-top: 20px !important;
+  }
+}
+
 /* Add smooth scrolling for iOS devices */
 @supports (-webkit-overflow-scrolling: touch) {
   .input-container,
@@ -169,7 +206,7 @@ input:checked + .slider:before {
     width: 50px;
     height: 28px;
   }
-  
+
   .slider:before {
     height: 20px;
     width: 20px;
@@ -177,7 +214,7 @@ input:checked + .slider:before {
     bottom: 3px;
     background-size: 12px;
   }
-  
+
   input:checked + .slider:before {
     transform: translateX(22px);
   }

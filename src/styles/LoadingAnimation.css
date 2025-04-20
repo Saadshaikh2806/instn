@@ -18,7 +18,7 @@
 }
 
 .loading-container {
-  width: 80%;
+  width: 90%;
   max-width: 500px;
   padding: 30px;
   background-color: var(--input-background);
@@ -26,6 +26,46 @@
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   text-align: center;
   border: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+  .loading-container {
+    width: 95%;
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .loading-container {
+    padding: 15px;
+  }
+
+  .loading-container h3 {
+    font-size: 18px;
+    margin-bottom: 15px;
+  }
+
+  .progress-label {
+    font-size: 12px;
+  }
+
+  .building-animation {
+    margin: 20px 0;
+    height: 80px;
+  }
+
+  .building-block {
+    width: 30px;
+    height: 30px;
+    margin: 0 3px;
+    top: 50px;
+  }
+
+  .loading-message {
+    font-size: 14px;
+    margin-top: 15px;
+    height: 20px;
+  }
 }
 
 .loading-container h3 {
