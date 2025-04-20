@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
+import LoadingAnimation from './LoadingAnimation';
 
-const StreamingLivePreview = ({ htmlCode, cssCode, jsCode }) => {
+const StreamingLivePreview = ({ htmlCode, cssCode, jsCode, isLoading }) => {
   const iframeRef = useRef(null);
   const [popupWindow, setPopupWindow] = useState(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [htmlProgress, setHtmlProgress] = useState(0);
+  const [cssProgress, setCssProgress] = useState(0);
+  const [jsProgress, setJsProgress] = useState(0);
+  const [overallProgress, setOverallProgress] = useState(0);
 
   const focusIframe = (e) => {
     if (iframeRef.current) {
@@ -35,10 +40,10 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode }) => {
     try {
       const width = window.screen.width;
       const height = window.screen.height;
-      const newWindow = window.open('', 'Preview', 
+      const newWindow = window.open('', 'Preview',
         `width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`
       );
-      
+
       if (!newWindow) {
         console.error('Failed to open new window - popup might be blocked');
         return;
@@ -61,7 +66,7 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode }) => {
                 padding: 0;
                 box-sizing: border-box;
               }
-              
+
               body {
                 font-family: Arial, sans-serif;
                 line-height: 1.6;
@@ -112,6 +117,51 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode }) => {
     }
   };
 
+  // Effect to update progress based on code generation
+  useEffect(() => {
+    if (isLoading) {
+      // Calculate progress based on code length
+      const calculateProgress = () => {
+        // Estimate expected lengths (these are rough estimates)
+        const expectedHtmlLength = 1500;
+        const expectedCssLength = 800;
+        const expectedJsLength = 400;
+
+        // Calculate progress percentages
+        const htmlPct = Math.min(100, Math.round((htmlCode?.length || 0) / expectedHtmlLength * 100));
+        const cssPct = Math.min(100, Math.round((cssCode?.length || 0) / expectedCssLength * 100));
+        const jsPct = Math.min(100, Math.round((jsCode?.length || 0) / expectedJsLength * 100));
+
+        setHtmlProgress(htmlPct);
+        setCssProgress(cssPct);
+        setJsProgress(jsPct);
+
+        // Overall progress is weighted average
+        const overall = Math.round((htmlPct * 0.5) + (cssPct * 0.3) + (jsPct * 0.2));
+        setOverallProgress(overall);
+      };
+
+      calculateProgress();
+
+      // Simulate progress even when no updates are coming
+      const interval = setInterval(() => {
+        setHtmlProgress(prev => Math.min(prev + 1, 100));
+        setCssProgress(prev => Math.min(prev + (Math.random() > 0.5 ? 1 : 0), 100));
+        setJsProgress(prev => Math.min(prev + (Math.random() > 0.7 ? 1 : 0), 100));
+      }, 300);
+
+      return () => clearInterval(interval);
+    } else {
+      // Reset progress when loading is complete
+      if (htmlCode || cssCode || jsCode) {
+        setHtmlProgress(100);
+        setCssProgress(100);
+        setJsProgress(100);
+        setOverallProgress(100);
+      }
+    }
+  }, [isLoading, htmlCode, cssCode, jsCode]);
+
   useEffect(() => {
     const updateIframeContent = () => {
       try {
@@ -120,6 +170,71 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode }) => {
 
         const doc = iframe.contentDocument;
         if (!doc) return;
+
+        // Add chunk animation CSS
+        const chunkAnimationCSS = `
+          .chunk-animation {
+            opacity: 0;
+            transform: translateY(10px);
+            animation: fadeInChunk 0.5s ease-out forwards;
+          }
+          @keyframes fadeInChunk {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .highlight-new {
+            animation: highlightNew 2s ease-out;
+          }
+          @keyframes highlightNew {
+            0% { background-color: rgba(100, 149, 237, 0.2); }
+            100% { background-color: transparent; }
+          }
+        `;
+
+        // Process HTML to add chunk animations
+        let processedHtml = htmlCode || '<h1 style="text-align: center; margin-top: 20px;">Your website will appear here</h1>';
+
+        // If we're loading and have some HTML, add animation classes
+        if (isLoading && htmlCode) {
+          // Split HTML into chunks (elements) and add animation classes
+          const htmlLines = processedHtml.split('\n');
+          let inElement = false;
+          let elementCount = 0;
+
+          for (let i = 0; i < htmlLines.length; i++) {
+            const line = htmlLines[i].trim();
+
+            // Check for element start
+            if (line.startsWith('<') && !line.startsWith('</') && !line.includes('/>')) {
+              inElement = true;
+              elementCount++;
+
+              // Add animation class to main elements (not to small inline elements)
+              if (line.includes('<div') || line.includes('<section') ||
+                  line.includes('<article') || line.includes('<header') ||
+                  line.includes('<footer') || line.includes('<main') ||
+                  line.includes('<aside') || line.includes('<nav')) {
+
+                // Insert class attribute or add to existing class
+                if (line.includes('class="')) {
+                  htmlLines[i] = htmlLines[i].replace('class="', 'class="chunk-animation ');
+                } else if (line.includes('<')) {
+                  const tagEnd = line.indexOf('>');
+                  if (tagEnd !== -1) {
+                    htmlLines[i] = line.substring(0, tagEnd) + ' class="chunk-animation"' + line.substring(tagEnd);
+                  }
+                }
+              }
+            }
+
+            // Check for element end
+            if (inElement && line.includes('</')) {
+              inElement = false;
+            }
+          }
+
+          processedHtml = htmlLines.join('\n');
+        }
 
         const content = `
           <!DOCTYPE html>
@@ -134,7 +249,7 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode }) => {
                   padding: 0;
                   box-sizing: border-box;
                 }
-                
+
                 body {
                   font-family: Arial, sans-serif;
                   line-height: 1.6;
@@ -153,17 +268,37 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode }) => {
                   image-rendering: pixelated;
                 }
 
+                /* Animation styles */
+                ${chunkAnimationCSS}
+
                 /* Apply custom CSS */
                 ${cssCode || ''}
               </style>
             </head>
             <body>
               <div id="root">
-                ${htmlCode || '<h1 style="text-align: center; margin-top: 20px;">Your website will appear here</h1>'}
+                ${processedHtml}
               </div>
               <script>
                 try {
                   ${jsCode || ''}
+
+                  // Add animation to dynamically added elements
+                  document.addEventListener('DOMContentLoaded', function() {
+                    const observer = new MutationObserver(function(mutations) {
+                      mutations.forEach(function(mutation) {
+                        if (mutation.addedNodes.length) {
+                          mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType === 1) { // Element node
+                              node.classList.add('highlight-new');
+                            }
+                          });
+                        }
+                      });
+                    });
+
+                    observer.observe(document.body, { childList: true, subtree: true });
+                  });
                 } catch (error) {
                   console.error('Error executing JavaScript:', error);
                 }
@@ -222,9 +357,9 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode }) => {
   }, []);
 
   return (
-    <div 
-      className="streaming-live-preview" 
-      style={{ 
+    <div
+      className="streaming-live-preview"
+      style={{
         height: 'calc(100% - 40px)',
         display: 'flex',
         flexDirection: 'column',
@@ -232,7 +367,7 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode }) => {
       }}
       onClick={focusIframe}
     >
-      <button 
+      <button
         onClick={openInNewWindow}
         className="fullscreen-toggle"
         aria-label="Open in new window"
@@ -243,8 +378,19 @@ const StreamingLivePreview = ({ htmlCode, cssCode, jsCode }) => {
           <line x1="10" y1="14" x2="21" y2="3"></line>
         </svg>
       </button>
-      <iframe 
-        ref={iframeRef} 
+
+      {/* Loading animation overlay */}
+      {isLoading && (
+        <LoadingAnimation
+          progress={overallProgress}
+          htmlProgress={htmlProgress}
+          cssProgress={cssProgress}
+          jsProgress={jsProgress}
+        />
+      )}
+
+      <iframe
+        ref={iframeRef}
         title="Streaming Live Preview"
         style={{
           width: '100%',

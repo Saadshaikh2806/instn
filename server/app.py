@@ -5,8 +5,17 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import json
 import traceback
+import requests
+import random
 
 load_dotenv()
+
+# Unsplash API configuration
+UNSPLASH_ACCESS_KEY = "YOUR_UNSPLASH_ACCESS_KEY"  # Replace with your actual key or use environment variable
+# You can use the demo access key for development
+UNSPLASH_DEMO_KEY = "ab3411e4ac868c2646c0ed488dfd919ef612b04c264f3374c97fff98ed253dc9"
+
+# We'll use a text description of the CSS rules instead of actual CSS code to avoid Python parsing issues
 
 app = Flask(__name__)
 # Configure CORS to allow requests from your React app
@@ -23,12 +32,98 @@ try:
     api_key = os.getenv('GOOGLE_API_KEY')
     if not api_key:
         raise ValueError("GOOGLE_API_KEY not found in environment variables")
-    
+
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-2.0-flash-exp')
 except Exception as e:
     print(f"Error initializing Gemini client: {str(e)}")
     traceback.print_exc()
+
+def get_unsplash_image(query, count=1):
+    """
+    Fetch images from Unsplash API based on a search query
+    """
+    try:
+        # Clean up the query to make it more search-friendly
+        clean_query = query.strip().lower()
+
+        # If the query is a phrase, try to extract the most meaningful parts
+        if len(clean_query.split()) > 2:
+            # Remove common words that don't add much to image search
+            stop_words = ['the', 'and', 'or', 'a', 'an', 'in', 'on', 'at', 'by', 'for', 'with', 'about', 'website', 'page']
+            query_words = [word for word in clean_query.split() if word not in stop_words]
+            if query_words:
+                clean_query = ' '.join(query_words[:3])  # Use up to 3 most relevant words
+
+        print(f"Searching Unsplash for: '{clean_query}'")
+
+        url = "https://api.unsplash.com/search/photos"
+        headers = {
+            "Authorization": f"Client-ID {UNSPLASH_DEMO_KEY}"
+        }
+        params = {
+            "query": clean_query,
+            "per_page": max(count * 3, 10),  # Request more images to have better selection
+            "orientation": "landscape",
+            "content_filter": "high"
+        }
+
+        response = requests.get(url, headers=headers, params=params)
+        data = response.json()
+
+        if response.status_code == 200 and data.get('results'):
+            # If we got results, select the most relevant ones
+            results = data['results']
+
+            # Sort by relevance (Unsplash already does this, but we can prioritize certain attributes)
+            # For example, prioritize images with descriptions that match our query
+            if len(results) > count:
+                # If we have more results than needed, try to select the best ones
+                # This is a simple heuristic - we could make this more sophisticated
+                selected_results = []
+
+                # First, try to find images with matching descriptions
+                for img in results:
+                    alt_desc = img.get('alt_description', '') or ''
+                    alt_desc = alt_desc.lower()
+
+                    desc = img.get('description', '') or ''
+                    desc = desc.lower()
+
+                    if clean_query in alt_desc or clean_query in desc:
+                        selected_results.append(img)
+                        if len(selected_results) >= count:
+                            break
+
+                # If we still need more images, add from the remaining results
+                if len(selected_results) < count:
+                    remaining = [img for img in results if img not in selected_results]
+                    selected_results.extend(remaining[:count - len(selected_results)])
+
+                results = selected_results[:count]
+            else:
+                results = results[:count]
+
+            images = []
+            for img in results:
+                # Use smaller image sizes to prevent oversized images
+                images.append({
+                    "url": img['urls']['small'],  # Use small size by default (max 400px wide)
+                    "regular_url": img['urls']['regular'],  # Keep regular size as an option
+                    "thumb_url": img['urls']['thumb'],  # Thumbnail size (max 200px wide)
+                    "alt": img.get('alt_description', clean_query) or clean_query,
+                    "credit": f"Photo by {img['user']['name']} on Unsplash",
+                    "download_url": img['links']['download'],
+                    "topic": clean_query
+                })
+            return images
+        else:
+            print(f"Error fetching Unsplash images: {data}")
+            return None
+    except Exception as e:
+        print(f"Error in get_unsplash_image: {str(e)}")
+        traceback.print_exc()
+        return None
 
 def stream_response(response):
     try:
@@ -46,16 +141,113 @@ def generate_website():
         data = request.json
         if not data:
             return jsonify({'error': 'No JSON data received'}), 400
-        
+
         description = data.get('description')
         if not description:
             return jsonify({'error': 'No description provided'}), 400
 
         print(f"Received description: {description}")  # Debug log
 
+        # Use Gemini to extract relevant image topics from the description
+        topic_prompt = f"""
+        Based on this website description: "{description}"
+
+        Extract 3-5 specific keywords that would make good search terms for relevant images.
+        Focus on concrete objects, scenes, or themes that would be visually represented on the website.
+
+        Return only a comma-separated list of single words or short phrases, nothing else.
+        Example: "mountains, hiking, adventure gear, camping, nature"
+        """
+
+        try:
+            topic_response = model.generate_content(
+                topic_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.2,  # Low temperature for more deterministic results
+                    max_output_tokens=100,
+                )
+            )
+
+            # Parse the response to get image topics
+            if hasattr(topic_response, 'text'):
+                image_topics_text = topic_response.text.strip()
+                image_topics = [topic.strip() for topic in image_topics_text.split(',') if topic.strip()]
+                print(f"Generated image topics: {image_topics}")
+            else:
+                # Fallback to basic keyword extraction
+                image_topics = []
+                keywords = description.split()
+                potential_topics = [word for word in keywords if len(word) > 4]  # Simple heuristic for meaningful words
+
+                # Select up to 3 random topics if we have enough
+                if len(potential_topics) > 3:
+                    image_topics = random.sample(potential_topics, 3)
+                else:
+                    image_topics = potential_topics
+        except Exception as e:
+            print(f"Error generating image topics: {str(e)}")
+            # Fallback to basic extraction
+            image_topics = []
+            keywords = description.split()
+            potential_topics = [word for word in keywords if len(word) > 4]
+            if len(potential_topics) > 3:
+                image_topics = random.sample(potential_topics, 3)
+            else:
+                image_topics = potential_topics
+
+        # Add some general topics based on common website needs if we don't have enough
+        if not image_topics:
+            general_topics = ['business', 'nature', 'technology', 'people', 'food']
+            image_topics = random.sample(general_topics, 3)
+        elif len(image_topics) < 3:
+            general_topics = ['business', 'nature', 'technology', 'people', 'food']
+            additional_topics = random.sample(general_topics, 3 - len(image_topics))
+            image_topics.extend(additional_topics)
+
+        # Fetch images for each topic
+        image_data = []
+        for topic in image_topics:
+            images = get_unsplash_image(topic, 1)
+            if images:
+                image_data.append({
+                    'topic': topic,
+                    'image': images[0]
+                })
+
+        # Create image references for the prompt
+        image_references = ""
+        if image_data:
+            image_references = "\nUse the following Unsplash images in your website, matching each image to the most appropriate context:\n"
+            for i, data in enumerate(image_data):
+                topic = data['image'].get('topic', 'general')
+                image_references += f"Image {i+1} (Topic: {topic}):\n"
+                image_references += f"- Small (recommended): {data['image']['url']}\n"
+                image_references += f"- Thumbnail: {data['image']['thumb_url']}\n"
+                image_references += f"- Regular: {data['image']['regular_url']}\n"
+                image_references += f"Description: {data['image']['alt']}\n"
+                image_references += f"Credit: {data['image']['credit']}\n\n"
+
+        # Use the responsive_image_css defined at the top of the file
+
         # Prompt engineering for website generation
         prompt = f"""
         Create a website based on this description: {description}
+
+        {image_references}
+
+        IMPORTANT INSTRUCTIONS FOR IMAGES:
+        1. Instead of using placeholder images or lorem ipsum, use the provided Unsplash images.
+        2. Match each image to the most appropriate section of the website based on its topic and description.
+        3. Make sure to include the photographer credit in the website footer or directly below/near each image.
+        4. Use the images in a way that enhances the website's content and purpose.
+        5. ALWAYS include CSS for ALL images to ensure they are responsive and properly sized with these rules:
+           - Set max-width: 100% and height: auto on all images
+           - Add display: block and appropriate margins
+           - Limit content images to max-width: 600px
+           - Add a photo-credit class with smaller font size (12px) and italic style
+        6. Keep images reasonably sized - use the small or thumbnail versions when appropriate.
+        7. If you need additional images beyond what's provided, use descriptive alt text instead of placeholder URLs.
+
         Return only the HTML, CSS, and JavaScript code without any explanations.
         Format the response exactly as:
         ```html
@@ -72,7 +264,7 @@ def generate_website():
         """
 
         print("Sending request to Gemini...")  # Debug log
-        
+
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
@@ -114,24 +306,112 @@ def modify_website():
         if not all([modification, current_html, current_css]):
             return jsonify({'error': 'Missing required fields'}), 400
 
+        # Use Gemini to extract relevant image topics from the modification request
+        topic_prompt = f"""
+        Based on this website modification request: "{modification}"
+
+        Extract 2-3 specific keywords that would make good search terms for relevant images.
+        Focus on concrete objects, scenes, or themes that would be visually represented on the website.
+
+        Return only a comma-separated list of single words or short phrases, nothing else.
+        Example: "mountains, hiking, adventure gear"
+        """
+
+        try:
+            topic_response = model.generate_content(
+                topic_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.2,  # Low temperature for more deterministic results
+                    max_output_tokens=100,
+                )
+            )
+
+            # Parse the response to get image topics
+            if hasattr(topic_response, 'text'):
+                image_topics_text = topic_response.text.strip()
+                image_topics = [topic.strip() for topic in image_topics_text.split(',') if topic.strip()]
+                print(f"Generated image topics for modification: {image_topics}")
+            else:
+                # Fallback to basic keyword extraction
+                image_topics = []
+                keywords = modification.split()
+                potential_topics = [word for word in keywords if len(word) > 4]  # Simple heuristic for meaningful words
+
+                # Select up to 2 random topics if we have enough
+                if len(potential_topics) > 2:
+                    image_topics = random.sample(potential_topics, 2)
+                else:
+                    image_topics = potential_topics
+        except Exception as e:
+            print(f"Error generating image topics for modification: {str(e)}")
+            # Fallback to basic extraction
+            image_topics = []
+            keywords = modification.split()
+            potential_topics = [word for word in keywords if len(word) > 4]
+            if len(potential_topics) > 2:
+                image_topics = random.sample(potential_topics, 2)
+            else:
+                image_topics = potential_topics
+
+        # Fetch images for each topic
+        image_data = []
+        for topic in image_topics:
+            images = get_unsplash_image(topic, 1)
+            if images:
+                image_data.append({
+                    'topic': topic,
+                    'image': images[0]
+                })
+
+        # Create image references for the prompt
+        image_references = ""
+        if image_data:
+            image_references = "\nYou can use these additional Unsplash images in your modifications, matching each image to the most appropriate context:\n"
+            for i, data in enumerate(image_data):
+                topic = data['image'].get('topic', 'general')
+                image_references += f"Image {i+1} (Topic: {topic}):\n"
+                image_references += f"- Small (recommended): {data['image']['url']}\n"
+                image_references += f"- Thumbnail: {data['image']['thumb_url']}\n"
+                image_references += f"- Regular: {data['image']['regular_url']}\n"
+                image_references += f"Description: {data['image']['alt']}\n"
+                image_references += f"Credit: {data['image']['credit']}\n\n"
+
+        # Reuse the responsive image CSS from above
         prompt = f"""
         Modify this website according to this description: {modification}
-        
+
         Current HTML:
         ```html
         {current_html}
         ```
-        
+
         Current CSS:
         ```css
         {current_css}
         ```
-        
+
         Current JavaScript:
         ```javascript
         {current_js}
         ```
-        
+
+        {image_references}
+
+        IMPORTANT INSTRUCTIONS FOR IMAGES:
+        1. Preserve all existing Unsplash image credits and attributions in the current website
+        2. If adding new images, use the provided Unsplash images with proper attribution
+        3. Match each new image to the most appropriate section based on its topic and description
+        4. Include the photographer credit directly below/near each image or in the footer
+        5. Only replace existing images if specifically requested in the modification
+        6. Use the images in a way that enhances the website's content and purpose
+        7. ALWAYS include CSS for ALL images to ensure they are responsive and properly sized with these rules:
+           - Set max-width: 100% and height: auto on all images
+           - Add display: block and appropriate margins
+           - Limit content images to max-width: 600px
+           - Add a photo-credit class with smaller font size (12px) and italic style
+        8. Keep images reasonably sized - use the small or thumbnail versions when appropriate
+        9. If you need additional images beyond what's provided, use descriptive alt text instead of placeholder URLs
+
         Return only the modified HTML, CSS, and JavaScript code without any explanations.
         Format the response exactly as:
         ```html
@@ -165,6 +445,30 @@ def modify_website():
 
     except Exception as e:
         print(f"Error in modify_website: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/api/unsplash-images', methods=['GET'])
+def get_unsplash_images():
+    try:
+        query = request.args.get('query')
+        count = request.args.get('count', default=1, type=int)
+
+        if not query:
+            return jsonify({'error': 'No query provided'}), 400
+
+        images = get_unsplash_image(query, count)
+
+        if images:
+            return jsonify({'images': images})
+        else:
+            return jsonify({'error': 'Failed to fetch images'}), 500
+
+    except Exception as e:
+        print(f"Error in get_unsplash_images: {str(e)}")
         traceback.print_exc()
         return jsonify({
             'error': str(e),

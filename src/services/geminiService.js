@@ -31,24 +31,63 @@ export async function generateWebsite(description, onUpdate) {
         if (line.startsWith('data: ')) {
           const data = JSON.parse(line.slice(6));
           const { text } = data;
-          
+
           // Accumulate the text
           accumulatedText += text;
-          
+
           // Extract HTML, CSS, and JavaScript from the accumulated response
           const htmlMatch = accumulatedText.match(/```html\n([\s\S]*?)\n```/);
           const cssMatch = accumulatedText.match(/```css\n([\s\S]*?)\n```/);
           const jsMatch = accumulatedText.match(/```javascript\n([\s\S]*?)\n```/);
 
+          // Process partial matches to show incremental updates
+          let partialHtml = lastUpdate.html;
+          let partialCss = lastUpdate.css;
+          let partialJs = lastUpdate.js;
+
+          // If we have a complete match, use it
+          if (htmlMatch) {
+            partialHtml = htmlMatch[1].trim();
+          }
+          // Otherwise look for partial HTML content (still being generated)
+          else if (accumulatedText.includes('```html\n')) {
+            const partialHtmlMatch = accumulatedText.match(/```html\n([\s\S]*)$/);
+            if (partialHtmlMatch && !partialHtmlMatch[1].includes('```css')) {
+              partialHtml = partialHtmlMatch[1].trim();
+            }
+          }
+
+          // Same for CSS
+          if (cssMatch) {
+            partialCss = cssMatch[1].trim();
+          }
+          else if (accumulatedText.includes('```css\n')) {
+            const partialCssMatch = accumulatedText.match(/```css\n([\s\S]*)$/);
+            if (partialCssMatch && !partialCssMatch[1].includes('```javascript')) {
+              partialCss = partialCssMatch[1].trim();
+            }
+          }
+
+          // And JavaScript
+          if (jsMatch) {
+            partialJs = jsMatch[1].trim();
+          }
+          else if (accumulatedText.includes('```javascript\n')) {
+            const partialJsMatch = accumulatedText.match(/```javascript\n([\s\S]*)$/);
+            if (partialJsMatch) {
+              partialJs = partialJsMatch[1].trim();
+            }
+          }
+
           const update = {
-            html: htmlMatch ? htmlMatch[1].trim() : lastUpdate.html,
-            css: cssMatch ? cssMatch[1].trim() : lastUpdate.css,
-            js: jsMatch ? jsMatch[1].trim() : lastUpdate.js
+            html: partialHtml,
+            css: partialCss,
+            js: partialJs
           };
 
           // Only update if there are actual changes
-          if (update.html !== lastUpdate.html || 
-              update.css !== lastUpdate.css || 
+          if (update.html !== lastUpdate.html ||
+              update.css !== lastUpdate.css ||
               update.js !== lastUpdate.js) {
             console.log('New update:', update);
             lastUpdate = update;
@@ -115,7 +154,7 @@ export async function modifyWebsite(modificationDescription, currentHtml, curren
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Error response body:', errorText);
-      
+
       try {
         const errorData = JSON.parse(errorText);
         throw new Error(errorData.error || `Server error: ${response.status}`);
@@ -138,29 +177,68 @@ export async function modifyWebsite(modificationDescription, currentHtml, curren
 
       for (const line of lines) {
         if (!line.trim()) continue;
-        
+
         if (line.startsWith('data: ')) {
           try {
             const data = JSON.parse(line.slice(6));
             const { text } = data;
-            
+
             // Accumulate the text
             accumulatedText += text;
-            
+
             // Extract HTML, CSS, and JavaScript from the accumulated response
             const htmlMatch = accumulatedText.match(/```html\n([\s\S]*?)\n```/);
             const cssMatch = accumulatedText.match(/```css\n([\s\S]*?)\n```/);
             const jsMatch = accumulatedText.match(/```javascript\n([\s\S]*?)\n```/);
 
+            // Process partial matches to show incremental updates
+            let partialHtml = lastUpdate.html;
+            let partialCss = lastUpdate.css;
+            let partialJs = lastUpdate.js;
+
+            // If we have a complete match, use it
+            if (htmlMatch) {
+              partialHtml = htmlMatch[1].trim();
+            }
+            // Otherwise look for partial HTML content (still being generated)
+            else if (accumulatedText.includes('```html\n')) {
+              const partialHtmlMatch = accumulatedText.match(/```html\n([\s\S]*)$/);
+              if (partialHtmlMatch && !partialHtmlMatch[1].includes('```css')) {
+                partialHtml = partialHtmlMatch[1].trim();
+              }
+            }
+
+            // Same for CSS
+            if (cssMatch) {
+              partialCss = cssMatch[1].trim();
+            }
+            else if (accumulatedText.includes('```css\n')) {
+              const partialCssMatch = accumulatedText.match(/```css\n([\s\S]*)$/);
+              if (partialCssMatch && !partialCssMatch[1].includes('```javascript')) {
+                partialCss = partialCssMatch[1].trim();
+              }
+            }
+
+            // And JavaScript
+            if (jsMatch) {
+              partialJs = jsMatch[1].trim();
+            }
+            else if (accumulatedText.includes('```javascript\n')) {
+              const partialJsMatch = accumulatedText.match(/```javascript\n([\s\S]*)$/);
+              if (partialJsMatch) {
+                partialJs = partialJsMatch[1].trim();
+              }
+            }
+
             const update = {
-              html: htmlMatch ? htmlMatch[1].trim() : lastUpdate.html,
-              css: cssMatch ? cssMatch[1].trim() : lastUpdate.css,
-              js: jsMatch ? jsMatch[1].trim() : lastUpdate.js
+              html: partialHtml,
+              css: partialCss,
+              js: partialJs
             };
 
             // Only update if there are actual changes
-            if (update.html !== lastUpdate.html || 
-                update.css !== lastUpdate.css || 
+            if (update.html !== lastUpdate.html ||
+                update.css !== lastUpdate.css ||
                 update.js !== lastUpdate.js) {
               console.log('New update:', update);
               lastUpdate = { ...update };
